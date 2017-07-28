@@ -17,20 +17,19 @@
 
 package com.dangdang.ddframe.job.cloud.scheduler.statistics;
 
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
+import com.dangdang.ddframe.job.cloud.scheduler.statistics.job.StatisticJob;
+import com.dangdang.ddframe.job.cloud.scheduler.statistics.job.TestStatisticJob;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
 import org.unitils.util.ReflectionUtils;
 
-import com.dangdang.ddframe.job.cloud.scheduler.statistics.job.StatisticJob;
-import com.dangdang.ddframe.job.cloud.scheduler.statistics.job.TestStatisticJob;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
 public class StatisticsSchedulerTest {

@@ -17,7 +17,7 @@
 
 package com.dangdang.ddframe.job.cloud.scheduler.mesos;
 
-import com.dangdang.ddframe.job.cloud.scheduler.config.ConfigurationService;
+import com.dangdang.ddframe.job.cloud.scheduler.config.job.CloudJobConfigurationService;
 import com.dangdang.ddframe.job.cloud.scheduler.context.JobContext;
 import com.dangdang.ddframe.job.cloud.scheduler.fixture.CloudJobConfigurationBuilder;
 import com.dangdang.ddframe.job.cloud.scheduler.state.failover.FailoverService;
@@ -30,7 +30,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.unitils.util.ReflectionUtils;
 
 import java.util.Arrays;
@@ -47,7 +47,7 @@ public final class LaunchingTasksTest {
     private CoordinatorRegistryCenter regCenter;
     
     @Mock
-    private ConfigurationService configService;
+    private CloudJobConfigurationService jobConfigService;
     
     @Mock
     private ReadyService readyService;
@@ -65,7 +65,7 @@ public final class LaunchingTasksTest {
     @Before
     public void setUp() throws NoSuchFieldException {
         facadeService = new FacadeService(regCenter);
-        ReflectionUtils.setFieldValue(facadeService, "configService", configService);
+        ReflectionUtils.setFieldValue(facadeService, "jobConfigService", jobConfigService);
         ReflectionUtils.setFieldValue(facadeService, "readyService", readyService);
         ReflectionUtils.setFieldValue(facadeService, "runningService", runningService);
         ReflectionUtils.setFieldValue(facadeService, "failoverService", failoverService);

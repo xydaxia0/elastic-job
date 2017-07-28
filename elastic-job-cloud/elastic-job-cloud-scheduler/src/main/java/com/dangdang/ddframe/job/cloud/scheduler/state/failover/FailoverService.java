@@ -17,9 +17,9 @@
 
 package com.dangdang.ddframe.job.cloud.scheduler.state.failover;
 
-import com.dangdang.ddframe.job.cloud.scheduler.boot.env.BootstrapEnvironment;
-import com.dangdang.ddframe.job.cloud.scheduler.config.CloudJobConfiguration;
-import com.dangdang.ddframe.job.cloud.scheduler.config.ConfigurationService;
+import com.dangdang.ddframe.job.cloud.scheduler.env.BootstrapEnvironment;
+import com.dangdang.ddframe.job.cloud.scheduler.config.job.CloudJobConfiguration;
+import com.dangdang.ddframe.job.cloud.scheduler.config.job.CloudJobConfigurationService;
 import com.dangdang.ddframe.job.cloud.scheduler.context.JobContext;
 import com.dangdang.ddframe.job.cloud.scheduler.state.running.RunningService;
 import com.dangdang.ddframe.job.context.ExecutionType;
@@ -48,20 +48,20 @@ import java.util.Set;
  * @author zhangliang
  */
 @Slf4j
-public class FailoverService {
+public final class FailoverService {
     
     private final BootstrapEnvironment env = BootstrapEnvironment.getInstance();
     
     private final CoordinatorRegistryCenter regCenter;
     
-    private final ConfigurationService configService;
+    private final CloudJobConfigurationService configService;
     
     private final RunningService runningService;
     
     public FailoverService(final CoordinatorRegistryCenter regCenter) {
         this.regCenter = regCenter;
-        configService = new ConfigurationService(regCenter);
-        runningService = new RunningService();
+        configService = new CloudJobConfigurationService(regCenter);
+        runningService = new RunningService(regCenter);
     }
     
     /**
@@ -105,10 +105,8 @@ public class FailoverService {
                 continue;
             }
             List<Integer> assignedShardingItems = getAssignedShardingItems(each, taskIdList, assignedTasks);
-            if (!assignedShardingItems.isEmpty()) {
-                if (jobConfig.isPresent()) {
-                    result.add(new JobContext(jobConfig.get(), assignedShardingItems, ExecutionType.FAILOVER));    
-                }
+            if (!assignedShardingItems.isEmpty() && jobConfig.isPresent()) {
+                result.add(new JobContext(jobConfig.get(), assignedShardingItems, ExecutionType.FAILOVER));    
             }
         }
         return result;

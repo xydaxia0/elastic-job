@@ -62,6 +62,7 @@ public interface CoordinatorRegistryCenter extends RegistryCenter {
      * 持久化顺序注册数据.
      *
      * @param key 键
+     * @param value 值
      * @return 包含10位顺序数字的znode名称
      */
     String persistSequential(String key, String value);
@@ -79,6 +80,13 @@ public interface CoordinatorRegistryCenter extends RegistryCenter {
      * @param cachePath 需加入缓存的路径
      */
     void addCacheData(String cachePath);
+    
+    /**
+     * 释放本地缓存.
+     *
+     * @param cachePath 需释放缓存的路径
+     */
+    void evictCacheData(String cachePath);
     
     /**
      * 获取注册中心数据缓存对象.

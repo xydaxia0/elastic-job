@@ -17,19 +17,10 @@
 
 package com.dangdang.ddframe.job.cloud.scheduler.statistics;
 
-import java.sql.SQLException;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import com.dangdang.ddframe.job.api.JobType;
-import com.dangdang.ddframe.job.cloud.scheduler.config.CloudJobConfiguration;
-import com.dangdang.ddframe.job.cloud.scheduler.config.ConfigurationService;
-import com.dangdang.ddframe.job.cloud.scheduler.config.JobExecutionType;
+import com.dangdang.ddframe.job.cloud.scheduler.config.job.CloudJobConfiguration;
+import com.dangdang.ddframe.job.cloud.scheduler.config.job.CloudJobConfigurationService;
+import com.dangdang.ddframe.job.cloud.scheduler.config.job.CloudJobExecutionType;
 import com.dangdang.ddframe.job.cloud.scheduler.statistics.job.JobRunningStatisticJob;
 import com.dangdang.ddframe.job.cloud.scheduler.statistics.job.RegisteredJobStatisticJob;
 import com.dangdang.ddframe.job.cloud.scheduler.statistics.job.TaskResultStatisticJob;
@@ -45,10 +36,18 @@ import com.dangdang.ddframe.job.statistics.type.job.JobTypeStatistics;
 import com.dangdang.ddframe.job.statistics.type.task.TaskResultStatistics;
 import com.dangdang.ddframe.job.statistics.type.task.TaskRunningStatistics;
 import com.google.common.base.Optional;
-
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import java.sql.SQLException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 统计作业调度管理器.
@@ -57,34 +56,47 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
-public class StatisticManager {
+public final class StatisticManager {
     
-    private static volatile StatisticManager instance; 
+    private static volatile StatisticManager instance;
     
-    private final ConfigurationService configurationService;
+    private final CoordinatorRegistryCenter registryCenter;
+    
+    private final CloudJobConfigurationService configurationService;
     
     private final Optional<JobEventRdbConfiguration> jobEventRdbConfiguration;
     
     private final StatisticsScheduler scheduler;
     
-    private final Map<StatisticInterval, TaskResultMetaData> statisticDatas;
+    private final Map<StatisticInterval, TaskResultMetaData> statisticData;
     
     private StatisticRdbRepository rdbRepository;
     
+    private StatisticManager(final CoordinatorRegistryCenter registryCenter, final Optional<JobEventRdbConfiguration> jobEventRdbConfiguration,
+                             final StatisticsScheduler scheduler, final Map<StatisticInterval, TaskResultMetaData> statisticData) {
+        this.registryCenter = registryCenter;
+        this.configurationService = new CloudJobConfigurationService(registryCenter);
+        this.jobEventRdbConfiguration = jobEventRdbConfiguration;
+        this.scheduler = scheduler;
+        this.statisticData = statisticData;
+    }
+    
     /**
      * 获取统计作业调度管理器.
-     *
+     * 
+     * @param regCenter 注册中心
+     * @param jobEventRdbConfiguration 作业数据库事件配置
      * @return 调度管理器对象
      */
     public static StatisticManager getInstance(final CoordinatorRegistryCenter regCenter, final Optional<JobEventRdbConfiguration> jobEventRdbConfiguration) {
         if (null == instance) {
             synchronized (StatisticManager.class) {
                 if (null == instance) {
-                    Map<StatisticInterval, TaskResultMetaData> statisticDatas = new HashMap<>();
-                    statisticDatas.put(StatisticInterval.MINUTE, new TaskResultMetaData());
-                    statisticDatas.put(StatisticInterval.HOUR, new TaskResultMetaData());
-                    statisticDatas.put(StatisticInterval.DAY, new TaskResultMetaData());
-                    instance = new StatisticManager(new ConfigurationService(regCenter), jobEventRdbConfiguration, new StatisticsScheduler(), statisticDatas);
+                    Map<StatisticInterval, TaskResultMetaData> statisticData = new HashMap<>();
+                    statisticData.put(StatisticInterval.MINUTE, new TaskResultMetaData());
+                    statisticData.put(StatisticInterval.HOUR, new TaskResultMetaData());
+                    statisticData.put(StatisticInterval.DAY, new TaskResultMetaData());
+                    instance = new StatisticManager(regCenter, jobEventRdbConfiguration, new StatisticsScheduler(), statisticData);
                     init();
                 }
             }
@@ -107,10 +119,11 @@ public class StatisticManager {
      */
     public void startup() {
         if (null != rdbRepository) {
-            scheduler.register(new TaskResultStatisticJob(StatisticInterval.MINUTE, statisticDatas.get(StatisticInterval.MINUTE), rdbRepository));
-            scheduler.register(new TaskResultStatisticJob(StatisticInterval.HOUR, statisticDatas.get(StatisticInterval.HOUR), rdbRepository));
-            scheduler.register(new TaskResultStatisticJob(StatisticInterval.DAY, statisticDatas.get(StatisticInterval.DAY), rdbRepository));
-            scheduler.register(new JobRunningStatisticJob(rdbRepository));
+            scheduler.start();
+            scheduler.register(new TaskResultStatisticJob(StatisticInterval.MINUTE, statisticData.get(StatisticInterval.MINUTE), rdbRepository));
+            scheduler.register(new TaskResultStatisticJob(StatisticInterval.HOUR, statisticData.get(StatisticInterval.HOUR), rdbRepository));
+            scheduler.register(new TaskResultStatisticJob(StatisticInterval.DAY, statisticData.get(StatisticInterval.DAY), rdbRepository));
+            scheduler.register(new JobRunningStatisticJob(registryCenter, rdbRepository));
             scheduler.register(new RegisteredJobStatisticJob(configurationService, rdbRepository));
         }
     }
@@ -126,18 +139,18 @@ public class StatisticManager {
      * 任务运行成功.
      */
     public void taskRunSuccessfully() {
-        statisticDatas.get(StatisticInterval.MINUTE).incrementAndGetSuccessCount();
-        statisticDatas.get(StatisticInterval.HOUR).incrementAndGetSuccessCount();
-        statisticDatas.get(StatisticInterval.DAY).incrementAndGetSuccessCount();
+        statisticData.get(StatisticInterval.MINUTE).incrementAndGetSuccessCount();
+        statisticData.get(StatisticInterval.HOUR).incrementAndGetSuccessCount();
+        statisticData.get(StatisticInterval.DAY).incrementAndGetSuccessCount();
     }
     
     /**
      * 作业运行失败.
      */
     public void taskRunFailed() {
-        statisticDatas.get(StatisticInterval.MINUTE).incrementAndGetFailedCount();
-        statisticDatas.get(StatisticInterval.HOUR).incrementAndGetFailedCount();
-        statisticDatas.get(StatisticInterval.DAY).incrementAndGetFailedCount();
+        statisticData.get(StatisticInterval.MINUTE).incrementAndGetFailedCount();
+        statisticData.get(StatisticInterval.HOUR).incrementAndGetFailedCount();
+        statisticData.get(StatisticInterval.DAY).incrementAndGetFailedCount();
     }
     
     private boolean isRdbConfigured() {
@@ -171,6 +184,7 @@ public class StatisticManager {
     /**
      * 获取最近一个统计周期的任务运行结果统计数据.
      * 
+     * @param statisticInterval 统计周期
      * @return 任务运行结果统计数据对象
      */
     public TaskResultStatistics findLatestTaskResultStatistics(final StatisticInterval statisticInterval) {
@@ -225,9 +239,9 @@ public class StatisticManager {
         int transientJobCnt = 0;
         int daemonJobCnt = 0;
         for (CloudJobConfiguration each : configurationService.loadAll()) {
-            if (JobExecutionType.TRANSIENT.equals(each.getJobExecutionType())) {
+            if (CloudJobExecutionType.TRANSIENT.equals(each.getJobExecutionType())) {
                 transientJobCnt++;
-            } else if (JobExecutionType.DAEMON.equals(each.getJobExecutionType())) {
+            } else if (CloudJobExecutionType.DAEMON.equals(each.getJobExecutionType())) {
                 daemonJobCnt++;
             }
         }
@@ -272,11 +286,10 @@ public class StatisticManager {
     
     private Date getOnlineDate() {
         SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd");
-        Date onlineDate = null;
         try {
-            onlineDate = formatter.parse("2016-12-16");
+            return formatter.parse("2016-12-16");
         } catch (final ParseException ex) {
+            return null;
         }
-        return onlineDate;
     }
 }

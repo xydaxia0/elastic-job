@@ -50,7 +50,7 @@ import java.util.Map;
  */
 @RequiredArgsConstructor
 @Slf4j
-public class JobEventRdbSearch {
+public final class JobEventRdbSearch {
     
     private static final String TABLE_JOB_EXECUTION_LOG = "JOB_EXECUTION_LOG";
     
@@ -67,7 +67,7 @@ public class JobEventRdbSearch {
     /**
      * 检索作业运行执行轨迹.
      * 
-     * @param condition
+     * @param condition 查询条件
      * @return 作业执行轨迹检索结果
      */
     public Result<JobExecutionEvent> findJobExecutionEvents(final Condition condition) {
@@ -77,7 +77,7 @@ public class JobEventRdbSearch {
     /**
      * 检索作业运行状态轨迹.
      * 
-     * @param condition
+     * @param condition 查询条件
      * @return 作业状态轨迹检索结果
      */
     public Result<JobStatusTraceEvent> findJobStatusTraceEvents(final Condition condition) {
@@ -89,7 +89,7 @@ public class JobEventRdbSearch {
         try (
                 Connection conn = dataSource.getConnection();
                 PreparedStatement preparedStatement = createDataPreparedStatement(conn, TABLE_JOB_EXECUTION_LOG, FIELDS_JOB_EXECUTION_LOG, condition);
-                ResultSet resultSet = preparedStatement.executeQuery();
+                ResultSet resultSet = preparedStatement.executeQuery()
                 ) {
             while (resultSet.next()) {
                 JobExecutionEvent jobExecutionEvent = new JobExecutionEvent(resultSet.getString(1), resultSet.getString(2), resultSet.getString(3), resultSet.getString(4),
@@ -111,7 +111,7 @@ public class JobEventRdbSearch {
         try (
                 Connection conn = dataSource.getConnection();
                 PreparedStatement preparedStatement = createDataPreparedStatement(conn, TABLE_JOB_STATUS_TRACE_LOG, FIELDS_JOB_STATUS_TRACE_LOG, condition);
-                ResultSet resultSet = preparedStatement.executeQuery();
+                ResultSet resultSet = preparedStatement.executeQuery()
                 ) {
             while (resultSet.next()) {
                 JobStatusTraceEvent jobStatusTraceEvent = new JobStatusTraceEvent(resultSet.getString(1), resultSet.getString(2), resultSet.getString(3), resultSet.getString(4),
@@ -131,7 +131,7 @@ public class JobEventRdbSearch {
         try (
                 Connection conn = dataSource.getConnection();
                 PreparedStatement preparedStatement = createCountPreparedStatement(conn, tableName, tableFields, condition);
-                ResultSet resultSet = preparedStatement.executeQuery();
+                ResultSet resultSet = preparedStatement.executeQuery()
                 ) {
             resultSet.next();
             result = resultSet.getInt(1);
@@ -193,9 +193,9 @@ public class JobEventRdbSearch {
         StringBuilder sqlBuilder = new StringBuilder();
         sqlBuilder.append(" WHERE 1=1");
         if (null != condition.getFields() && !condition.getFields().isEmpty()) {
-            for (String each : condition.getFields().keySet()) {
-                String lowerUnderscore = CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, each);
-                if (null != condition.getFields().get(each) && tableFields.contains(lowerUnderscore)) {
+            for (Map.Entry<String, Object> entry : condition.getFields().entrySet()) {
+                String lowerUnderscore = CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, entry.getKey());
+                if (null != entry.getValue() && tableFields.contains(lowerUnderscore)) {
                     sqlBuilder.append(" AND ").append(lowerUnderscore).append("=?");
                 }
             }
@@ -212,10 +212,10 @@ public class JobEventRdbSearch {
     private void setBindValue(final PreparedStatement preparedStatement, final Collection<String> tableFields, final Condition condition) throws SQLException {
         int index = 1;
         if (null != condition.getFields() && !condition.getFields().isEmpty()) {
-            for (String each : condition.getFields().keySet()) {
-                String lowerUnderscore = CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, each);
-                if (null != condition.getFields().get(each) && tableFields.contains(lowerUnderscore)) {
-                    preparedStatement.setString(index++, String.valueOf(condition.getFields().get(each)));
+            for (Map.Entry<String, Object> entry : condition.getFields().entrySet()) {
+                String lowerUnderscore = CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, entry.getKey());
+                if (null != entry.getValue() && tableFields.contains(lowerUnderscore)) {
+                    preparedStatement.setString(index++, String.valueOf(entry.getValue()));
                 }
             }
         }
@@ -223,7 +223,7 @@ public class JobEventRdbSearch {
             preparedStatement.setTimestamp(index++, new Timestamp(condition.getStartTime().getTime()));
         }
         if (null != condition.getEndTime()) {
-            preparedStatement.setTimestamp(index++, new Timestamp(condition.getEndTime().getTime()));
+            preparedStatement.setTimestamp(index, new Timestamp(condition.getEndTime().getTime()));
         }
     }
     
@@ -270,6 +270,11 @@ public class JobEventRdbSearch {
         return sqlBuilder.toString();
     }
     
+    /**
+     * 查询条件对象.
+     * 
+     * @author liguangyun
+     */
     @RequiredArgsConstructor
     @Getter
     public static class Condition {

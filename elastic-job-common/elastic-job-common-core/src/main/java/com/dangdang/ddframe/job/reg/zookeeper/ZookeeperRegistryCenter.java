@@ -27,7 +27,6 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
-import org.apache.curator.framework.CuratorFrameworkFactory.Builder;
 import org.apache.curator.framework.api.ACLProvider;
 import org.apache.curator.framework.recipes.cache.ChildData;
 import org.apache.curator.framework.recipes.cache.TreeCache;
@@ -53,13 +52,14 @@ import java.util.concurrent.TimeUnit;
  * @author zhangliang
  */
 @Slf4j
-public class ZookeeperRegistryCenter implements CoordinatorRegistryCenter {
+public final class ZookeeperRegistryCenter implements CoordinatorRegistryCenter {
     
     @Getter(AccessLevel.PROTECTED)
     private ZookeeperConfiguration zkConfig;
     
     private final Map<String, TreeCache> caches = new HashMap<>();
     
+    @Getter
     private CuratorFramework client;
     
     public ZookeeperRegistryCenter(final ZookeeperConfiguration zkConfig) {
@@ -69,7 +69,7 @@ public class ZookeeperRegistryCenter implements CoordinatorRegistryCenter {
     @Override
     public void init() {
         log.debug("Elastic job: zookeeper registry center init, server lists is: {}.", zkConfig.getServerLists());
-        Builder builder = CuratorFrameworkFactory.builder()
+        CuratorFrameworkFactory.Builder builder = CuratorFrameworkFactory.builder()
                 .connectString(zkConfig.getServerLists())
                 .retryPolicy(new ExponentialBackoffRetry(zkConfig.getBaseSleepTimeMilliseconds(), zkConfig.getMaxRetries(), zkConfig.getMaxSleepTimeMilliseconds()))
                 .namespace(zkConfig.getNamespace());
@@ -81,18 +81,18 @@ public class ZookeeperRegistryCenter implements CoordinatorRegistryCenter {
         }
         if (!Strings.isNullOrEmpty(zkConfig.getDigest())) {
             builder.authorization("digest", zkConfig.getDigest().getBytes(Charsets.UTF_8))
-                   .aclProvider(new ACLProvider() {
-                       
-                       @Override
-                       public List<ACL> getDefaultAcl() {
-                           return ZooDefs.Ids.CREATOR_ALL_ACL;
-                       }
-                       
-                       @Override
-                       public List<ACL> getAclForPath(final String path) {
-                           return ZooDefs.Ids.CREATOR_ALL_ACL;
-                       }
-                   });
+                    .aclProvider(new ACLProvider() {
+                    
+                        @Override
+                        public List<ACL> getDefaultAcl() {
+                            return ZooDefs.Ids.CREATOR_ALL_ACL;
+                        }
+                    
+                        @Override
+                        public List<ACL> getAclForPath(final String path) {
+                            return ZooDefs.Ids.CREATOR_ALL_ACL;
+                        }
+                    });
         }
         client = builder.build();
         client.start();
@@ -101,9 +101,9 @@ public class ZookeeperRegistryCenter implements CoordinatorRegistryCenter {
                 client.close();
                 throw new KeeperException.OperationTimeoutException();
             }
-        //CHECKSTYLE:OFF
+            //CHECKSTYLE:OFF
         } catch (final Exception ex) {
-        //CHECKSTYLE:ON
+            //CHECKSTYLE:ON
             RegExceptionHandler.handleException(ex);
         }
     }
@@ -187,9 +187,9 @@ public class ZookeeperRegistryCenter implements CoordinatorRegistryCenter {
     @Override
     public int getNumChildren(final String key) {
         try {
-            Stat stat = client.getZookeeperClient().getZooKeeper().exists(getNameSpace() + key, false);
+            Stat stat = client.checkExists().forPath(key);
             if (null != stat) {
-                return stat.getNumChildren();   
+                return stat.getNumChildren();
             }
             //CHECKSTYLE:OFF
         } catch (final Exception ex) {
@@ -198,12 +198,7 @@ public class ZookeeperRegistryCenter implements CoordinatorRegistryCenter {
         }
         return 0;
     }
-    
-    private String getNameSpace() {
-        String result = this.getZkConfig().getNamespace();
-        return Strings.isNullOrEmpty(result) ? "" : "/" + result;
-    }
-    
+
     @Override
     public boolean isExisted(final String key) {
         try {
@@ -294,8 +289,8 @@ public class ZookeeperRegistryCenter implements CoordinatorRegistryCenter {
     public long getRegistryCenterTime(final String key) {
         long result = 0L;
         try {
-            String path = client.create().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL_SEQUENTIAL).forPath(key);
-            result = client.checkExists().forPath(path).getCtime();
+            persist(key, "");
+            result = client.checkExists().forPath(key).getMtime();
         //CHECKSTYLE:OFF
         } catch (final Exception ex) {
         //CHECKSTYLE:ON
@@ -321,6 +316,14 @@ public class ZookeeperRegistryCenter implements CoordinatorRegistryCenter {
             RegExceptionHandler.handleException(ex);
         }
         caches.put(cachePath + "/", cache);
+    }
+    
+    @Override
+    public void evictCacheData(final String cachePath) {
+        TreeCache cache = caches.remove(cachePath + "/");
+        if (null != cache) {
+            cache.close();
+        }
     }
     
     @Override

@@ -17,10 +17,10 @@
 
 package com.dangdang.ddframe.job.cloud.scheduler.state.ready;
 
-import com.dangdang.ddframe.job.cloud.scheduler.boot.env.BootstrapEnvironment;
-import com.dangdang.ddframe.job.cloud.scheduler.config.CloudJobConfiguration;
-import com.dangdang.ddframe.job.cloud.scheduler.config.ConfigurationService;
-import com.dangdang.ddframe.job.cloud.scheduler.config.JobExecutionType;
+import com.dangdang.ddframe.job.cloud.scheduler.env.BootstrapEnvironment;
+import com.dangdang.ddframe.job.cloud.scheduler.config.job.CloudJobConfiguration;
+import com.dangdang.ddframe.job.cloud.scheduler.config.job.CloudJobConfigurationService;
+import com.dangdang.ddframe.job.cloud.scheduler.config.job.CloudJobExecutionType;
 import com.dangdang.ddframe.job.context.ExecutionType;
 import com.dangdang.ddframe.job.cloud.scheduler.context.JobContext;
 import com.dangdang.ddframe.job.cloud.scheduler.state.running.RunningService;
@@ -45,20 +45,20 @@ import java.util.Map;
  * @author liguangyun
  */
 @Slf4j
-public class ReadyService {
+public final class ReadyService {
     
     private final BootstrapEnvironment env = BootstrapEnvironment.getInstance();
     
     private final CoordinatorRegistryCenter regCenter;
     
-    private final ConfigurationService configService;
+    private final CloudJobConfigurationService configService;
     
     private final RunningService runningService;
     
     public ReadyService(final CoordinatorRegistryCenter regCenter) {
         this.regCenter = regCenter;
-        configService = new ConfigurationService(regCenter);
-        runningService = new RunningService();
+        configService = new CloudJobConfigurationService(regCenter);
+        runningService = new RunningService(regCenter);
     }
     
     /**
@@ -72,7 +72,7 @@ public class ReadyService {
             return;
         }
         Optional<CloudJobConfiguration> cloudJobConfig = configService.load(jobName);
-        if (!cloudJobConfig.isPresent() || JobExecutionType.TRANSIENT != cloudJobConfig.get().getJobExecutionType()) {
+        if (!cloudJobConfig.isPresent() || CloudJobExecutionType.TRANSIENT != cloudJobConfig.get().getJobExecutionType()) {
             return;
         }
         String readyJobNode = ReadyNode.getReadyJobNodePath(jobName);
@@ -95,7 +95,7 @@ public class ReadyService {
             return;
         }
         Optional<CloudJobConfiguration> cloudJobConfig = configService.load(jobName);
-        if (!cloudJobConfig.isPresent() || JobExecutionType.DAEMON != cloudJobConfig.get().getJobExecutionType()) {
+        if (!cloudJobConfig.isPresent() || CloudJobExecutionType.DAEMON != cloudJobConfig.get().getJobExecutionType() || runningService.isJobRunning(jobName)) {
             return;
         }
         regCenter.persist(ReadyNode.getReadyJobNodePath(jobName), "1");
@@ -141,7 +141,7 @@ public class ReadyService {
                 regCenter.remove(ReadyNode.getReadyJobNodePath(each));
                 continue;
             }
-            if (!runningService.isJobRunning(each) || JobExecutionType.DAEMON == jobConfig.get().getJobExecutionType()) {
+            if (!runningService.isJobRunning(each)) {
                 result.add(JobContext.from(jobConfig.get(), ExecutionType.READY));
             }
         }

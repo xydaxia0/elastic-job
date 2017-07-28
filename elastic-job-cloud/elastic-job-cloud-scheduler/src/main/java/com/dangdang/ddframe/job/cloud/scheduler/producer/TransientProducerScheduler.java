@@ -17,7 +17,7 @@
 
 package com.dangdang.ddframe.job.cloud.scheduler.producer;
 
-import com.dangdang.ddframe.job.cloud.scheduler.config.CloudJobConfiguration;
+import com.dangdang.ddframe.job.cloud.scheduler.config.job.CloudJobConfiguration;
 import com.dangdang.ddframe.job.cloud.scheduler.state.ready.ReadyService;
 import com.dangdang.ddframe.job.exception.JobSystemException;
 import lombok.Setter;
@@ -45,17 +45,20 @@ import java.util.Properties;
  *
  * @author caohao
  */
-class TransientProducerScheduler {
+final class TransientProducerScheduler {
     
     private final TransientProducerRepository repository;
     
     private final ReadyService readyService;
     
-    private final Scheduler scheduler;
+    private Scheduler scheduler;
     
     TransientProducerScheduler(final ReadyService readyService) {
         repository = new TransientProducerRepository();
         this.readyService = readyService;
+    }
+    
+    void start() {
         scheduler = getScheduler();
         try {
             scheduler.start();
@@ -109,7 +112,7 @@ class TransientProducerScheduler {
         return TriggerBuilder.newTrigger().withIdentity(cron).withSchedule(CronScheduleBuilder.cronSchedule(cron).withMisfireHandlingInstructionDoNothing()).build();
     }
     
-    void deregister(final CloudJobConfiguration jobConfig) {
+    synchronized void deregister(final CloudJobConfiguration jobConfig) {
         repository.remove(jobConfig.getJobName());
         String cron = jobConfig.getTypeConfig().getCoreConfig().getCron();
         if (!repository.containsKey(buildJobKey(cron))) {
@@ -127,12 +130,13 @@ class TransientProducerScheduler {
     
     void shutdown() {
         try {
-            if (!scheduler.isShutdown()) {
+            if (null != scheduler && !scheduler.isShutdown()) {
                 scheduler.shutdown();
             }
         } catch (final SchedulerException ex) {
             throw new JobSystemException(ex);
         }
+        repository.removeAll();
     }
     
     @Setter

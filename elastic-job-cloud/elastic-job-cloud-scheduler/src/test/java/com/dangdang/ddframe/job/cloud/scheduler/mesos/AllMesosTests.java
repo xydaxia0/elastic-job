@@ -17,6 +17,7 @@
 
 package com.dangdang.ddframe.job.cloud.scheduler.mesos;
 
+import com.dangdang.ddframe.job.cloud.scheduler.ha.FrameworkIDServiceTest;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
@@ -27,8 +28,14 @@ import org.junit.runners.Suite;
         JobTaskRequestTest.class, 
         TaskInfoDataTest.class, 
         FacadeServiceTest.class, 
-        SchedulerEngineTest.class,
-        LaunchingTasksTest.class
+        SchedulerEngineTest.class, 
+        TaskLaunchScheduledServiceTest.class, 
+        SchedulerServiceTest.class, 
+        LaunchingTasksTest.class, 
+        FrameworkIDServiceTest.class, 
+        MesosStateServiceTest.class, 
+        ReconcileServiceTest.class, 
+        AppConstraintEvaluatorTest.class
     })
 public final class AllMesosTests {
 }

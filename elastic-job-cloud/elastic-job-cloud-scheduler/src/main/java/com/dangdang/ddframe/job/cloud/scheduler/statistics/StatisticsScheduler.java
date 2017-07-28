@@ -17,9 +17,8 @@
 
 package com.dangdang.ddframe.job.cloud.scheduler.statistics;
 
-import java.util.Map;
-import java.util.Properties;
-
+import com.dangdang.ddframe.job.cloud.scheduler.statistics.job.StatisticJob;
+import com.dangdang.ddframe.job.exception.JobStatisticException;
 import org.quartz.JobDetail;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
@@ -27,35 +26,26 @@ import org.quartz.impl.StdSchedulerFactory;
 import org.quartz.plugins.management.ShutdownHookPlugin;
 import org.quartz.simpl.SimpleThreadPool;
 
-import com.dangdang.ddframe.job.cloud.scheduler.statistics.job.StatisticJob;
-import com.dangdang.ddframe.job.exception.JobStatisticException;
+import java.util.Properties;
 
 /**
  * 统计作业调度器.
  *
  * @author liguangyun
  */
-class StatisticsScheduler {
+final class StatisticsScheduler {
     
-    private final Scheduler scheduler;
+    private final StdSchedulerFactory factory;
+    
+    private Scheduler scheduler;
     
     /**
      * 构造函数.
      */
     StatisticsScheduler() {
-        scheduler = getScheduler();
-        try {
-            scheduler.start();
-        } catch (final SchedulerException ex) {
-            throw new JobStatisticException(ex);
-        }
-    }
-    
-    private Scheduler getScheduler() {
-        StdSchedulerFactory factory = new StdSchedulerFactory();
+        factory = new StdSchedulerFactory();
         try {
             factory.initialize(getQuartzProperties());
-            return factory.getScheduler();
         } catch (final SchedulerException ex) {
             throw new JobStatisticException(ex);
         }
@@ -72,6 +62,18 @@ class StatisticsScheduler {
     }
     
     /**
+     * 启动调度器.
+     */
+    void start() {
+        try {
+            scheduler = factory.getScheduler();
+            scheduler.start();
+        } catch (final SchedulerException ex) {
+            throw new JobStatisticException(ex);
+        }
+    }
+    
+    /**
      * 注册统计作业.
      * 
      * @param statisticJob 统计作业
@@ -79,10 +81,7 @@ class StatisticsScheduler {
     void register(final StatisticJob statisticJob) {
         try {
             JobDetail jobDetail = statisticJob.buildJobDetail();
-            Map<String, Object> dataMap = statisticJob.getDataMap();
-            for (String each : dataMap.keySet()) {
-                jobDetail.getJobDataMap().put(each, dataMap.get(each));
-            }
+            jobDetail.getJobDataMap().putAll(statisticJob.getDataMap());
             scheduler.scheduleJob(jobDetail, statisticJob.buildTrigger());
         } catch (final SchedulerException ex) {
             throw new JobStatisticException(ex);
@@ -94,7 +93,7 @@ class StatisticsScheduler {
      */
     void shutdown() {
         try {
-            if (!scheduler.isShutdown()) {
+            if (null != scheduler && !scheduler.isShutdown()) {
                 scheduler.shutdown();
             }
         } catch (final SchedulerException ex) {

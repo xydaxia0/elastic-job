@@ -17,6 +17,7 @@
 
 package com.dangdang.ddframe.job.cloud.scheduler.statistics.job;
 
+import com.dangdang.ddframe.job.reg.base.CoordinatorRegistryCenter;
 import com.dangdang.ddframe.job.cloud.scheduler.state.running.RunningService;
 import com.dangdang.ddframe.job.cloud.scheduler.statistics.util.StatisticTimeUtils;
 import com.dangdang.ddframe.job.context.TaskContext;
@@ -50,20 +51,21 @@ import java.util.Set;
 @Setter
 @NoArgsConstructor
 @Slf4j
-public class JobRunningStatisticJob extends AbstractStatisticJob {
+public final class JobRunningStatisticJob extends AbstractStatisticJob {
+    
+    private static final StatisticInterval EXECUTE_INTERVAL = StatisticInterval.MINUTE;
     
     private RunningService runningService;
     
     private StatisticRdbRepository repository;
     
-    private final StatisticInterval execInterval = StatisticInterval.MINUTE;
-    
     /**
      * 构造函数.
+     * @param registryCenter 注册中心
      * @param rdbRepository 基于rdb的数据仓库对象
      */
-    public JobRunningStatisticJob(final StatisticRdbRepository rdbRepository) {
-        runningService = new RunningService();
+    public JobRunningStatisticJob(final CoordinatorRegistryCenter registryCenter, final StatisticRdbRepository rdbRepository) {
+        runningService = new RunningService(registryCenter);
         this.repository = rdbRepository;
     }
     
@@ -76,7 +78,7 @@ public class JobRunningStatisticJob extends AbstractStatisticJob {
     public Trigger buildTrigger() {
         return TriggerBuilder.newTrigger()
                 .withIdentity(getTriggerName())
-                .withSchedule(CronScheduleBuilder.cronSchedule(execInterval.getCron())
+                .withSchedule(CronScheduleBuilder.cronSchedule(EXECUTE_INTERVAL.getCron())
                 .withMisfireHandlingInstructionDoNothing()).build();
     }
     
@@ -90,9 +92,9 @@ public class JobRunningStatisticJob extends AbstractStatisticJob {
     
     @Override
     public void execute(final JobExecutionContext context) throws JobExecutionException {
-        Map<String, Set<TaskContext>> allRunnintTasks = runningService.getAllRunningTasks();
-        statisticJob(getJobRunningCount(allRunnintTasks));
-        statisticTask(getTaskRunningCount(allRunnintTasks));
+        Map<String, Set<TaskContext>> allRunningTasks = runningService.getAllRunningTasks();
+        statisticJob(getJobRunningCount(allRunningTasks));
+        statisticTask(getTaskRunningCount(allRunningTasks));
     }
     
     private void statisticJob(final int runningCount) {
@@ -100,7 +102,7 @@ public class JobRunningStatisticJob extends AbstractStatisticJob {
         if (latestOne.isPresent()) {
             fillBlankIfNeeded(latestOne.get());
         }
-        JobRunningStatistics jobRunningStatistics = new JobRunningStatistics(runningCount, StatisticTimeUtils.getCurrentStatisticTime(execInterval));
+        JobRunningStatistics jobRunningStatistics = new JobRunningStatistics(runningCount, StatisticTimeUtils.getCurrentStatisticTime(EXECUTE_INTERVAL));
         log.debug("Add jobRunningStatistics, runningCount is:{}", runningCount);
         repository.add(jobRunningStatistics);
     }
@@ -110,31 +112,31 @@ public class JobRunningStatisticJob extends AbstractStatisticJob {
         if (latestOne.isPresent()) {
             fillBlankIfNeeded(latestOne.get());
         }
-        TaskRunningStatistics taskRunningStatistics = new TaskRunningStatistics(runningCount, StatisticTimeUtils.getCurrentStatisticTime(execInterval));
+        TaskRunningStatistics taskRunningStatistics = new TaskRunningStatistics(runningCount, StatisticTimeUtils.getCurrentStatisticTime(EXECUTE_INTERVAL));
         log.debug("Add taskRunningStatistics, runningCount is:{}", runningCount);
         repository.add(taskRunningStatistics);
     }
     
-    private int getJobRunningCount(final Map<String, Set<TaskContext>> allRunnintTasks) {
+    private int getJobRunningCount(final Map<String, Set<TaskContext>> allRunningTasks) {
         int result = 0;
-        for (String each : allRunnintTasks.keySet()) {
-            if (!allRunnintTasks.get(each).isEmpty()) {
+        for (Map.Entry<String, Set<TaskContext>> entry : allRunningTasks.entrySet()) {
+            if (!entry.getValue().isEmpty()) {
                 result++;
             }
         }
         return result;
     }
     
-    private int getTaskRunningCount(final Map<String, Set<TaskContext>> allRunnintTasks) {
+    private int getTaskRunningCount(final Map<String, Set<TaskContext>> allRunningTasks) {
         int result = 0;
-        for (String each : allRunnintTasks.keySet()) {
-            result += allRunnintTasks.get(each).size();
+        for (Map.Entry<String, Set<TaskContext>> entry : allRunningTasks.entrySet()) {
+            result += entry.getValue().size();
         }
         return result;
     }
     
     private void fillBlankIfNeeded(final JobRunningStatistics latestOne) {
-        List<Date> blankDateRange = findBlankStatisticTimes(latestOne.getStatisticsTime(), execInterval);
+        List<Date> blankDateRange = findBlankStatisticTimes(latestOne.getStatisticsTime(), EXECUTE_INTERVAL);
         if (!blankDateRange.isEmpty()) {
             log.debug("Fill blank range of jobRunningStatistics, range is:{}", blankDateRange);
         }
@@ -144,7 +146,7 @@ public class JobRunningStatisticJob extends AbstractStatisticJob {
     }
     
     private void fillBlankIfNeeded(final TaskRunningStatistics latestOne) {
-        List<Date> blankDateRange = findBlankStatisticTimes(latestOne.getStatisticsTime(), execInterval);
+        List<Date> blankDateRange = findBlankStatisticTimes(latestOne.getStatisticsTime(), EXECUTE_INTERVAL);
         if (!blankDateRange.isEmpty()) {
             log.debug("Fill blank range of taskRunningStatistics, range is:{}", blankDateRange);
         }

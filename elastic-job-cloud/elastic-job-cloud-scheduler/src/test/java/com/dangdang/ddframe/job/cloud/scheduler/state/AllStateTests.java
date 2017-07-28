@@ -17,10 +17,15 @@
 
 package com.dangdang.ddframe.job.cloud.scheduler.state;
 
+import com.dangdang.ddframe.job.cloud.scheduler.state.disable.app.DisableAppNodeTest;
+import com.dangdang.ddframe.job.cloud.scheduler.state.disable.app.DisableAppServiceTest;
+import com.dangdang.ddframe.job.cloud.scheduler.state.disable.job.DisableJobNodeTest;
+import com.dangdang.ddframe.job.cloud.scheduler.state.disable.job.DisableJobServiceTest;
 import com.dangdang.ddframe.job.cloud.scheduler.state.failover.FailoverNodeTest;
 import com.dangdang.ddframe.job.cloud.scheduler.state.failover.FailoverServiceTest;
 import com.dangdang.ddframe.job.cloud.scheduler.state.ready.ReadyNodeTest;
 import com.dangdang.ddframe.job.cloud.scheduler.state.ready.ReadyServiceTest;
+import com.dangdang.ddframe.job.cloud.scheduler.state.running.RunningNodeTest;
 import com.dangdang.ddframe.job.cloud.scheduler.state.running.RunningServiceTest;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
@@ -30,8 +35,13 @@ import org.junit.runners.Suite;
         ReadyNodeTest.class, 
         ReadyServiceTest.class, 
         FailoverNodeTest.class, 
-        FailoverServiceTest.class, 
-        RunningServiceTest.class
+        FailoverServiceTest.class,
+        RunningNodeTest.class,
+        RunningServiceTest.class,
+        DisableAppNodeTest.class,
+        DisableAppServiceTest.class,
+        DisableJobNodeTest.class,
+        DisableJobServiceTest.class
     })
 public final class AllStateTests {
 }

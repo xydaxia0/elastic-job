@@ -44,7 +44,7 @@ import java.util.UUID;
  * @author caohao
  */
 @Slf4j
-class JobEventRdbStorage {
+final class JobEventRdbStorage {
     
     private static final String TABLE_JOB_EXECUTION_LOG = "JOB_EXECUTION_LOG";
     
@@ -114,7 +114,7 @@ class JobEventRdbStorage {
                 + "`execution_source` VARCHAR(20) NOT NULL, "
                 + "`failure_cause` VARCHAR(4000) NULL, "
                 + "`is_success` INT NOT NULL, "
-                + "`start_time` TIMESTAMP NOT NULL, "
+                + "`start_time` TIMESTAMP NULL, "
                 + "`complete_time` TIMESTAMP NULL, "
                 + "PRIMARY KEY (`id`));";
         try (PreparedStatement preparedStatement = conn.prepareStatement(dbSchema)) {
@@ -202,7 +202,6 @@ class JobEventRdbStorage {
             preparedStatement.setBoolean(1, jobExecutionEvent.isSuccess());
             preparedStatement.setTimestamp(2, new Timestamp(jobExecutionEvent.getCompleteTime().getTime()));
             preparedStatement.setString(3, jobExecutionEvent.getId());
-            log.info("updateJobExecutionEventWhenSuccess" + jobExecutionEvent.getId() + "," + jobExecutionEvent.getJobName());
             if (0 == preparedStatement.executeUpdate()) {
                 return insertJobExecutionEventWhenSuccess(jobExecutionEvent);
             }
@@ -235,7 +234,6 @@ class JobEventRdbStorage {
             result = true;
         } catch (final SQLException ex) {
             if (isDuplicateRecord(ex)) {
-                log.info("isDuplicateRecord");
                 return updateJobExecutionEventWhenSuccess(jobExecutionEvent);
             }
             // TODO 记录失败直接输出日志,未来可考虑配置化
@@ -246,13 +244,14 @@ class JobEventRdbStorage {
     
     private boolean updateJobExecutionEventFailure(final JobExecutionEvent jobExecutionEvent) {
         boolean result = false;
-        String sql = "UPDATE `" + TABLE_JOB_EXECUTION_LOG + "` SET `is_success` = ?, `failure_cause` = ? WHERE id = ?";
+        String sql = "UPDATE `" + TABLE_JOB_EXECUTION_LOG + "` SET `is_success` = ?, `complete_time` = ?, `failure_cause` = ? WHERE id = ?";
         try (
                 Connection conn = dataSource.getConnection();
                 PreparedStatement preparedStatement = conn.prepareStatement(sql)) {
             preparedStatement.setBoolean(1, jobExecutionEvent.isSuccess());
-            preparedStatement.setString(2, truncateString(jobExecutionEvent.getFailureCause()));
-            preparedStatement.setString(3, jobExecutionEvent.getId());
+            preparedStatement.setTimestamp(2, new Timestamp(jobExecutionEvent.getCompleteTime().getTime()));
+            preparedStatement.setString(3, truncateString(jobExecutionEvent.getFailureCause()));
+            preparedStatement.setString(4, jobExecutionEvent.getId());
             if (0 == preparedStatement.executeUpdate()) {
                 return insertJobExecutionEventWhenFailure(jobExecutionEvent);
             }

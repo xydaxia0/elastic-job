@@ -17,11 +17,16 @@
 
 package com.dangdang.ddframe.job.cloud.scheduler.mesos;
 
-import com.dangdang.ddframe.job.cloud.scheduler.config.CloudJobConfiguration;
-import com.dangdang.ddframe.job.cloud.scheduler.config.ConfigurationService;
-import com.dangdang.ddframe.job.cloud.scheduler.config.JobExecutionType;
+import com.dangdang.ddframe.job.cloud.scheduler.config.app.CloudAppConfiguration;
+import com.dangdang.ddframe.job.cloud.scheduler.config.app.CloudAppConfigurationService;
+import com.dangdang.ddframe.job.cloud.scheduler.config.job.CloudJobConfiguration;
+import com.dangdang.ddframe.job.cloud.scheduler.config.job.CloudJobConfigurationService;
+import com.dangdang.ddframe.job.cloud.scheduler.config.job.CloudJobExecutionType;
 import com.dangdang.ddframe.job.cloud.scheduler.context.JobContext;
+import com.dangdang.ddframe.job.cloud.scheduler.state.disable.app.DisableAppService;
+import com.dangdang.ddframe.job.cloud.scheduler.state.disable.job.DisableJobService;
 import com.dangdang.ddframe.job.cloud.scheduler.state.failover.FailoverService;
+import com.dangdang.ddframe.job.cloud.scheduler.state.failover.FailoverTaskInfo;
 import com.dangdang.ddframe.job.cloud.scheduler.state.ready.ReadyService;
 import com.dangdang.ddframe.job.cloud.scheduler.state.running.RunningService;
 import com.dangdang.ddframe.job.context.ExecutionType;
@@ -31,11 +36,15 @@ import com.dangdang.ddframe.job.reg.base.CoordinatorRegistryCenter;
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.collect.Lists;
+import lombok.extern.slf4j.Slf4j;
+import org.codehaus.jettison.json.JSONException;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * 为Mesos提供的门面服务.
@@ -43,9 +52,12 @@ import java.util.List;
  * @author zhangliang
  * @author caohao
  */
-public class FacadeService {
+@Slf4j
+public final class FacadeService {
     
-    private final ConfigurationService configService;
+    private final CloudAppConfigurationService appConfigService;
+    
+    private final CloudJobConfigurationService jobConfigService;
     
     private final ReadyService readyService;
     
@@ -53,18 +65,29 @@ public class FacadeService {
     
     private final FailoverService failoverService;
     
+    private final DisableAppService disableAppService;
+    
+    private final DisableJobService disableJobService;
+    
+    private final MesosStateService mesosStateService;
+    
     public FacadeService(final CoordinatorRegistryCenter regCenter) {
-        configService = new ConfigurationService(regCenter);
+        appConfigService = new CloudAppConfigurationService(regCenter);
+        jobConfigService = new CloudJobConfigurationService(regCenter);
         readyService = new ReadyService(regCenter);
-        runningService = new RunningService();
+        runningService = new RunningService(regCenter);
         failoverService = new FailoverService(regCenter);
+        disableAppService = new DisableAppService(regCenter);
+        disableJobService = new DisableJobService(regCenter);
+        mesosStateService = new MesosStateService(regCenter);
     }
     
     /**
-     * 框架启动.
+     * 启动门面服务.
      */
     public void start() {
-        runningService.clear();
+        log.info("Elastic Job: Start facade service");
+        runningService.start();
     }
     
     /**
@@ -122,7 +145,9 @@ public class FacadeService {
     
     /**
      * 更新常驻作业运行状态.
+     * 
      * @param taskContext 任务运行时上下文
+     * @param isIdle 是否空闲
      */
     public void updateDaemonStatus(final TaskContext taskContext, final boolean isIdle) {
         runningService.updateIdle(taskContext, isIdle);
@@ -143,14 +168,30 @@ public class FacadeService {
      * @param taskContext 任务上下文
      */
     public void recordFailoverTask(final TaskContext taskContext) {
-        Optional<CloudJobConfiguration> jobConfigOptional = configService.load(taskContext.getMetaInfo().getJobName());
+        Optional<CloudJobConfiguration> jobConfigOptional = jobConfigService.load(taskContext.getMetaInfo().getJobName());
         if (!jobConfigOptional.isPresent()) {
             return;
         }
+        if (isDisable(jobConfigOptional.get())) {
+            return;
+        }
         CloudJobConfiguration jobConfig = jobConfigOptional.get();
-        if (jobConfig.getTypeConfig().getCoreConfig().isFailover() || JobExecutionType.DAEMON == jobConfig.getJobExecutionType()) {
+        if (jobConfig.getTypeConfig().getCoreConfig().isFailover() || CloudJobExecutionType.DAEMON == jobConfig.getJobExecutionType()) {
             failoverService.add(taskContext);
         }
+    }
+    
+    private boolean isDisable(final CloudJobConfiguration jobConfiguration) {
+        return disableAppService.isDisabled(jobConfiguration.getAppName()) || disableJobService.isDisabled(jobConfiguration.getJobName());
+    }
+    
+    /**
+     * 将瞬时作业放入待执行队列.
+     *
+     * @param jobName 作业名称
+     */
+    public void addTransient(final String jobName) {
+        readyService.addTransient(jobName);
     }
     
     /**
@@ -160,7 +201,17 @@ public class FacadeService {
      * @return 云作业配置
      */
     public Optional<CloudJobConfiguration> load(final String jobName) {
-        return configService.load(jobName);
+        return jobConfigService.load(jobName);
+    }
+    
+    /**
+     * 根据作业应用名称获取云作业应用配置.
+     *
+     * @param appName 作业应用名称
+     * @return 云作业应用配置
+     */
+    public Optional<CloudAppConfiguration> loadAppConfig(final String appName) {
+        return appConfigService.load(appName);
     }
     
     /**
@@ -179,17 +230,14 @@ public class FacadeService {
      * @param jobName 作业名称
      */
     public void addDaemonJobToReadyQueue(final String jobName) {
+        Optional<CloudJobConfiguration> jobConfigOptional = jobConfigService.load(jobName);
+        if (!jobConfigOptional.isPresent()) {
+            return;
+        }
+        if (isDisable(jobConfigOptional.get())) {
+            return;
+        }
         readyService.addDaemon(jobName);
-    }
-    
-    /**
-     * 判断作业是否在运行.
-     *
-     * @param jobName 作业名称
-     * @return 作业是否在运行.
-     */
-    public boolean isRunning(final String jobName) {
-        return !runningService.getRunningTasks(jobName).isEmpty();
     }
     
     /**
@@ -198,7 +246,7 @@ public class FacadeService {
      * <p>READY类型的作业为整体, 任意一片运行都视为作业运行. FAILOVER则仅以当前分片运行为运行依据.</p>
      * 
      * @param taskContext 任务运行时上下文
-     * @return 作业是否在运行.
+     * @return 作业是否在运行
      */
     public boolean isRunning(final TaskContext taskContext) {
         return ExecutionType.FAILOVER != taskContext.getType() && !runningService.getRunningTasks(taskContext.getMetaInfo().getJobName()).isEmpty()
@@ -219,18 +267,83 @@ public class FacadeService {
      * 根据任务主键获取主机名称并清除该任务.
      *
      * @param taskId 任务主键
+     * @return 删除任务的主机名称
      */
     public String popMapping(final String taskId) {
         return runningService.popMapping(taskId);
     }
     
     /**
-     * 框架停止.
+     * 获取待运行的全部任务.
+     *
+     * @return 待运行的全部任务
+     */
+    public Map<String, Integer> getAllReadyTasks() {
+        return readyService.getAllReadyTasks();
+    }
+    
+    /**
+     * 获取所有运行中的任务.
+     *
+     * @return 运行中任务集合
+     */
+    public Map<String, Set<TaskContext>> getAllRunningTasks() {
+        return runningService.getAllRunningTasks();
+    }
+    
+    /**
+     * 获取待失效转移的全部任务.
+     *
+     * @return 待失效转移的全部任务
+     */
+    public Map<String, Collection<FailoverTaskInfo>> getAllFailoverTasks() {
+        return failoverService.getAllFailoverTasks();
+    }
+    
+    /**
+     * 判断作业是否被禁用.
+     * 
+     * @param jobName 作业名称
+     * @return 作业是否被禁用
+     */
+    public boolean isJobDisabled(final String jobName) {
+        Optional<CloudJobConfiguration> jobConfiguration = jobConfigService.load(jobName);
+        return !jobConfiguration.isPresent() || disableAppService.isDisabled(jobConfiguration.get().getAppName()) || disableJobService.isDisabled(jobName);
+    }
+    
+    /**
+     * 将作业移出禁用队列.
+     *
+     * @param jobName 作业名称
+     */
+    public void enableJob(final String jobName) {
+        disableJobService.remove(jobName);
+    }
+    
+    /**
+     * 将作业放入禁用队列.
+     *
+     * @param jobName 作业名称
+     */
+    public void disableJob(final String jobName) {
+        disableJobService.add(jobName);
+    }
+    
+    /**
+     * 获取所有正在运行的Executor的信息.
+     * 
+     * @return Executor信息集合
+     */
+    public Collection<MesosStateService.ExecutorStateInfo> loadExecutorInfo() throws JSONException {
+        return mesosStateService.executors();
+    }
+    
+    /**
+     * 停止门面服务.
      */
     public void stop() {
+        log.info("Elastic Job: Stop facade service");
         // TODO 停止作业调度
         runningService.clear();
-        TaskLaunchProcessor.shutdown();
-        StatisticsProcessor.shutdown();
     }
 }

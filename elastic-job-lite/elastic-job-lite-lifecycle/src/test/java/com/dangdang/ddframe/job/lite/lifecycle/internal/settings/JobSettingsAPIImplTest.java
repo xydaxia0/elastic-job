@@ -79,6 +79,7 @@ public class JobSettingsAPIImplTest {
         assertFalse(jobSettings.isFailover());
         assertTrue(jobSettings.isMisfire());
         assertThat(jobSettings.getJobShardingStrategyClass(), is(""));
+        assertThat(jobSettings.getReconcileIntervalMinutes(), is(10));
         jobSettings.getJobProperties().put(JobPropertiesEnum.EXECUTOR_SERVICE_HANDLER.getKey(), DefaultExecutorServiceHandler.class.getCanonicalName());
         jobSettings.getJobProperties().put(JobPropertiesEnum.JOB_EXCEPTION_HANDLER.getKey(), DefaultJobExceptionHandler.class.getCanonicalName());
         assertThat(jobSettings.getDescription(), is(""));
@@ -105,11 +106,43 @@ public class JobSettingsAPIImplTest {
         jobSettings.setMisfire(true);
         jobSettings.getJobProperties().put(JobPropertiesEnum.EXECUTOR_SERVICE_HANDLER.getKey(), DefaultExecutorServiceHandler.class.getCanonicalName());
         jobSettings.getJobProperties().put(JobPropertiesEnum.JOB_EXCEPTION_HANDLER.getKey(), DefaultJobExceptionHandler.class.getCanonicalName());
+        jobSettings.setReconcileIntervalMinutes(70);
         jobSettingsAPI.updateJobSettings(jobSettings);
         verify(regCenter).update("/test_job/config", "{\"jobName\":\"test_job\",\"jobClass\":\"com.dangdang.ddframe.job.lite.fixture.TestDataflowJob\","
                 + "\"cron\":\"0/1 * * * * ?\",\"shardingTotalCount\":10,\"monitorExecution\":true,\"streamingProcess\":true,"
                 + "\"maxTimeDiffSeconds\":-1,\"monitorPort\":-1,\"failover\":false,\"misfire\":true,"
                 + "\"jobProperties\":{\"executor_service_handler\":\"" + DefaultExecutorServiceHandler.class.getCanonicalName() + "\","
-                + "\"job_exception_handler\":\"" + DefaultJobExceptionHandler.class.getCanonicalName() + "\"}}");
+                + "\"job_exception_handler\":\"" + DefaultJobExceptionHandler.class.getCanonicalName() + "\"},\"reconcileIntervalMinutes\":70}");
+    }
+    
+    @Test(expected = IllegalArgumentException.class)
+    public void assertUpdateJobSettingsIfJobNameIsEmpty() {
+        JobSettings jobSettings = new JobSettings();
+        jobSettings.setJobName("");
+        jobSettingsAPI.updateJobSettings(jobSettings);
+    }
+    
+    @Test(expected = IllegalArgumentException.class)
+    public void assertUpdateJobSettingsIfCronIsEmpty() {
+        JobSettings jobSettings = new JobSettings();
+        jobSettings.setJobName("test_job");
+        jobSettings.setCron("");
+        jobSettingsAPI.updateJobSettings(jobSettings);
+    }
+    
+    @Test(expected = IllegalArgumentException.class)
+    public void assertUpdateJobSettingsIfShardingTotalCountLessThanOne() {
+        JobSettings jobSettings = new JobSettings();
+        jobSettings.setJobName("test_job");
+        jobSettings.setCron("0/1 * * * * ?");
+        jobSettings.setShardingTotalCount(0);
+        jobSettingsAPI.updateJobSettings(jobSettings);
+    }
+    
+    @Test
+    public void assertRemoveJobSettings() {
+        when(regCenter.get("/test_job/config")).thenReturn(LifecycleJsonConstants.getScriptJobJson());
+        jobSettingsAPI.removeJobSettings("test_job");
+        verify(regCenter).remove("/test_job");
     }
 }

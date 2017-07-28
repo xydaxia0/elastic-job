@@ -18,8 +18,8 @@
 package com.dangdang.ddframe.job.cloud.scheduler.fixture;
 
 import com.dangdang.ddframe.job.api.simple.SimpleJob;
-import com.dangdang.ddframe.job.cloud.scheduler.config.CloudJobConfiguration;
-import com.dangdang.ddframe.job.cloud.scheduler.config.JobExecutionType;
+import com.dangdang.ddframe.job.cloud.scheduler.config.job.CloudJobConfiguration;
+import com.dangdang.ddframe.job.cloud.scheduler.config.job.CloudJobExecutionType;
 import com.dangdang.ddframe.job.config.JobCoreConfiguration;
 import com.dangdang.ddframe.job.config.dataflow.DataflowJobConfiguration;
 import com.dangdang.ddframe.job.config.script.ScriptJobConfiguration;
@@ -31,44 +31,60 @@ import lombok.NoArgsConstructor;
 public final class CloudJobConfigurationBuilder {
     
     public static CloudJobConfiguration createCloudJobConfiguration(final String jobName) {
-        return new CloudJobConfiguration(
+        return new CloudJobConfiguration("test_app",
                 new SimpleJobConfiguration(JobCoreConfiguration.newBuilder(jobName, "0/30 * * * * ?", 10).failover(true).misfire(true).build(), TestSimpleJob.class.getCanonicalName()), 
-                1.0d, 128.0d,  "http://localhost/app.jar", "bin/start.sh", JobExecutionType.TRANSIENT);
+                1.0d, 128.0d, CloudJobExecutionType.TRANSIENT);
     }
     
-    public static CloudJobConfiguration createCloudJobConfiguration(final String jobName, final JobExecutionType jobExecutionType) {
-        return new CloudJobConfiguration(
+    public static CloudJobConfiguration createCloudJobConfiguration(final String jobName, final CloudJobExecutionType jobExecutionType) {
+        return new CloudJobConfiguration("test_app",
                 new SimpleJobConfiguration(JobCoreConfiguration.newBuilder(jobName, "0/30 * * * * ?", 10).failover(true).misfire(true).build(), TestSimpleJob.class.getCanonicalName()),
-                1.0d, 128.0d,  "http://localhost/app.jar", "bin/start.sh", jobExecutionType);
+                1.0d, 128.0d, jobExecutionType);
+    }
+    
+    public static CloudJobConfiguration createCloudJobConfiguration(final String jobName, final CloudJobExecutionType jobExecutionType, final int shardingTotalCount) {
+        return new CloudJobConfiguration("test_app",
+                new SimpleJobConfiguration(JobCoreConfiguration.newBuilder(jobName, "0/30 * * * * ?", shardingTotalCount).failover(true).misfire(true).build(), TestSimpleJob.class.getCanonicalName()),
+                1.0d, 128.0d, jobExecutionType);
     }
     
     public static CloudJobConfiguration createCloudJobConfiguration(final String jobName, final boolean misfire) {
-        return new CloudJobConfiguration(
+        return new CloudJobConfiguration("test_app",
                 new SimpleJobConfiguration(JobCoreConfiguration.newBuilder(jobName, "0/30 * * * * ?", 10).failover(true).misfire(misfire).build(), TestSimpleJob.class.getCanonicalName()),
-                1.0d, 128.0d,  "http://localhost/app.jar", "bin/start.sh", JobExecutionType.TRANSIENT);
+                1.0d, 128.0d, CloudJobExecutionType.TRANSIENT);
+    }
+    
+    public static CloudJobConfiguration createCloudJobConfiguration(final String jobName, final String appName) {
+        return new CloudJobConfiguration(appName,
+                new SimpleJobConfiguration(JobCoreConfiguration.newBuilder(jobName, "0/30 * * * * ?", 10).failover(true).misfire(true).build(), TestSimpleJob.class.getCanonicalName()),
+                1.0d, 128.0d, CloudJobExecutionType.TRANSIENT);
     }
     
     public static CloudJobConfiguration createOtherCloudJobConfiguration(final String jobName) {
-        return new CloudJobConfiguration(
+        return new CloudJobConfiguration("test_app",
                 new SimpleJobConfiguration(JobCoreConfiguration.newBuilder(jobName, "0/30 * * * * ?", 3).failover(false).misfire(true).build(), TestSimpleJob.class.getCanonicalName()),
-                1.0d, 128.0d,  "http://localhost/app.jar", "bin/start.sh", JobExecutionType.TRANSIENT);
+                1.0d, 128.0d, CloudJobExecutionType.TRANSIENT);
     }
     
     public static CloudJobConfiguration createCloudSpringJobConfiguration(final String jobName) {
-        return new CloudJobConfiguration(
+        return new CloudJobConfiguration("test_spring_app",
                 new SimpleJobConfiguration(JobCoreConfiguration.newBuilder(jobName, "0/30 * * * * ?", 10).failover(true).misfire(true).build(), TestSimpleJob.class.getCanonicalName()),
-                1.0d, 128.0d,  "http://localhost/app.jar", "bin/start.sh", JobExecutionType.TRANSIENT, "springSimpleJob", "applicationContext.xml");
+                1.0d, 128.0d, CloudJobExecutionType.TRANSIENT, "springSimpleJob", "applicationContext.xml");
     }
     
     public static CloudJobConfiguration createDataflowCloudJobConfiguration(final String jobName) {
-        return new CloudJobConfiguration(
+        return new CloudJobConfiguration("test_app",
                 new DataflowJobConfiguration(JobCoreConfiguration.newBuilder(jobName, "0/30 * * * * ?", 3).failover(false).misfire(false).build(), SimpleJob.class.getCanonicalName(), true),
-                1.0d, 128.0d,  "http://localhost/app.jar", "bin/start.sh", JobExecutionType.TRANSIENT);
+                1.0d, 128.0d, CloudJobExecutionType.TRANSIENT);
     }
     
     public static CloudJobConfiguration createScriptCloudJobConfiguration(final String jobName) {
-        return new CloudJobConfiguration(
-                new ScriptJobConfiguration(JobCoreConfiguration.newBuilder(jobName, "0/30 * * * * ?", 3).failover(false).misfire(false).build(), "test.sh"),
-                1.0d, 128.0d,  "http://localhost/app.jar", "bin/start.sh", JobExecutionType.TRANSIENT);
+        return createScriptCloudJobConfiguration(jobName, 3);
+    }
+    
+    public static CloudJobConfiguration createScriptCloudJobConfiguration(final String jobName, final int shardingTotalCount) {
+        return new CloudJobConfiguration("test_app",
+                new ScriptJobConfiguration(JobCoreConfiguration.newBuilder(jobName, "0/30 * * * * ?", shardingTotalCount).failover(false).misfire(false).build(), "test.sh"),
+                1.0d, 128.0d, CloudJobExecutionType.TRANSIENT);
     }
 }
